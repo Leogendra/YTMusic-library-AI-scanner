@@ -2,10 +2,12 @@ from src.infrastructure.soundproof_parser import SoundProofFormatError, parse_so
 from src.infrastructure.soundproof_dump_cache import SoundProofDumpCache
 from src.infrastructure.soundproof_database import SoundProofDatabase
 from src.domain.classification import select_flagged_tracks
+from src.domain.removal_report import RemovalReport
 from src.infrastructure.ytmusic_library import YTMusicLibrary
 from src.application.library_analyzer import analyze_library
 from src.report.console_report import render_console_report
-from src.report.csv_report import write_csv_report
+from src.report.csv_report import CsvReportFormatError, read_csv_report, write_csv_report
+from src.report.verdict_formatting import YOUTUBE_MUSIC_WATCH_URL, video_id_from_url
 from ytmusicapi.exceptions import YTMusicError
 from pathlib import Path
 import urllib.error
@@ -45,6 +47,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="Also export the tracks whose artist has at least one AI vote but more human votes (default: only artists with AI votes >= human votes).",
     )
     parser.add_argument(
+        "--delete",
+        action="store_true",
+        help="DESTRUCTIVE: remove from your library the tracks listed in the CSV report, after a confirmation. If the report does not exist yet, it is only generated so that you can review it first.",
+    )
+    parser.add_argument(
         "--cache-dir",
         type=Path,
         default=DEFAULT_CACHE_DIRECTORY,
@@ -66,7 +73,7 @@ def main() -> int:
     sys.stdout.reconfigure(errors="replace")
     try:
         run(options)
-    except (FileNotFoundError, SoundProofFormatError, urllib.error.URLError, YTMusicError) as error:
+    except (FileNotFoundError, SoundProofFormatError, CsvReportFormatError, urllib.error.URLError, YTMusicError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
     else:
@@ -74,6 +81,16 @@ def main() -> int:
 
 
 def run(options: argparse.Namespace) -> None:
+    if not options.delete:
+        generate_report(options)
+    elif not options.output.is_file():
+        generate_report(options)
+        print(f"Review {options.output}, then run again with --delete to remove these tracks from your library.")
+    else:
+        delete_reported_tracks(options)
+
+
+def generate_report(options: argparse.Namespace) -> None:
     database = load_soundproof_database(options.cache_dir / SOUNDPROOF_CACHE_FILE_NAME, options.refresh)
     print(f"Loaded {len(database)} SoundProof artists.")
     library = YTMusicLibrary.from_browser_headers(options.auth_file)
@@ -85,6 +102,51 @@ def run(options: argparse.Namespace) -> None:
     write_csv_report(flagged_tracks, options.output, options.force)
     print()
     print(f"CSV report written to {options.output} ({len(flagged_tracks)} flagged tracks).")
+
+
+def delete_reported_tracks(options: argparse.Namespace) -> None:
+    report_rows = read_csv_report(options.output)
+    video_ids = list_video_ids(report_rows)
+    if not video_ids:
+        print(f"No track to delete in {options.output}.")
+    else:
+        library = YTMusicLibrary.from_browser_headers(options.auth_file)
+        print_tracks_to_delete(report_rows, options.output)
+        if ask_deletion_confirmation(len(video_ids)):
+            print_removal_report(library.remove_tracks(video_ids))
+        else:
+            print("Nothing was deleted.")
+
+
+def list_video_ids(report_rows: list[dict[str, str]]) -> list[str]:
+    video_ids = (video_id_from_url(report_row["url"]) for report_row in report_rows)
+    # dict.fromkeys drops the duplicates while keeping the order of the report.
+    return list(dict.fromkeys(video_id for video_id in video_ids if video_id is not None))
+
+
+def print_tracks_to_delete(report_rows: list[dict[str, str]], report_file: Path) -> None:
+    print(f"Tracks listed in {report_file}:")
+    for report_row in report_rows:
+        print(f"  {report_row['flagged_artist']} - {report_row['title']}")
+
+
+def ask_deletion_confirmation(track_count: int) -> bool:
+    print()
+    print(f"This will REMOVE {track_count} tracks from your YouTube Music library.")
+    try:
+        answer = input("Type \"yes\" to confirm: ")
+    except EOFError:
+        return False
+    else:
+        return answer.strip() == "yes"
+
+
+def print_removal_report(removal_report: RemovalReport) -> None:
+    print(f"Removed {len(removal_report.removed_video_ids)} tracks from your library.")
+    if removal_report.not_removed_video_ids:
+        print(f"{len(removal_report.not_removed_video_ids)} tracks could not be removed (already gone from the library or not removable):")
+        for video_id in removal_report.not_removed_video_ids:
+            print(f"  {YOUTUBE_MUSIC_WATCH_URL}{video_id}")
 
 
 def load_soundproof_database(cache_file: Path, force_refresh: bool) -> SoundProofDatabase:

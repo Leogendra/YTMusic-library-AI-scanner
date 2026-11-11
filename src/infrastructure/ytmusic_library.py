@@ -1,3 +1,4 @@
+from src.domain.removal_report import RemovalReport
 from src.domain.library_track import LibraryTrack
 from ytmusicapi.exceptions import YTMusicError
 from typing import Any, Protocol
@@ -13,16 +14,18 @@ _HEADER_NAME_PATTERN = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 
 
 
-class LibrarySongsClient(Protocol):
+class LibraryClient(Protocol):
     """The subset of the ytmusicapi client this adapter relies on."""
 
     def get_library_songs(self, limit: int | None = 25) -> list[dict[str, Any]]: ...
 
+    def edit_song_library_status(self, feedbackTokens: list[str] | None = None) -> dict[str, Any]: ...
+
 
 class YTMusicLibrary:
-    """Library source reading the songs saved in a YouTube Music account."""
+    """Library source and editor of the songs saved in a YouTube Music account."""
 
-    def __init__(self, client: LibrarySongsClient) -> None:
+    def __init__(self, client: LibraryClient) -> None:
         self._client = client
 
     @classmethod
@@ -47,6 +50,34 @@ class YTMusicLibrary:
                 tracks.append(track)
         return tracks
 
+    def remove_tracks(self, video_ids: list[str]) -> RemovalReport:
+        removal_tokens = self._find_removal_tokens(video_ids)
+        # Tracks missing from the library, or without removal token, cannot be removed and are reported back.
+        removable_video_ids = [video_id for video_id in video_ids if video_id in removal_tokens]
+        processed_video_ids = self._send_removals(removable_video_ids, removal_tokens)
+        not_removed_video_ids = tuple(video_id for video_id in video_ids if video_id not in processed_video_ids)
+        return RemovalReport(removed_video_ids=tuple(processed_video_ids), not_removed_video_ids=not_removed_video_ids)
+
+    def _find_removal_tokens(self, video_ids: list[str]) -> dict[str, str]:
+        removal_tokens: dict[str, str] = {}
+        for raw_song in self._request_songs():
+            video_id = raw_song.get("videoId")
+            removal_token = _parse_removal_token(raw_song)
+            if video_id in video_ids and removal_token is not None:
+                removal_tokens[video_id] = removal_token
+        return removal_tokens
+
+    def _send_removals(self, video_ids: list[str], removal_tokens: dict[str, str]) -> list[str]:
+        if not video_ids:
+            return []
+        else:
+            response = self._client.edit_song_library_status([removal_tokens[video_id] for video_id in video_ids])
+            feedback_responses = response.get("feedbackResponses", [])
+            return [
+                video_id
+                for video_id, feedback_response in zip(video_ids, feedback_responses)
+                if feedback_response.get("isProcessed") is True
+            ]
 
     def _request_songs(self) -> list[dict[str, Any]]:
         try:
@@ -89,6 +120,14 @@ def _parse_song(raw_song: dict[str, Any]) -> LibraryTrack | None:
             artist_names=_parse_artist_names(raw_song.get("artists")),
             album_name=_parse_album_name(raw_song.get("album")),
         )
+
+
+def _parse_removal_token(raw_song: dict[str, Any]) -> str | None:
+    feedback_tokens = raw_song.get("feedbackTokens")
+    if isinstance(feedback_tokens, dict):
+        return _optional_string(feedback_tokens.get("remove"))
+    else:
+        return None
 
 
 def _parse_artist_names(raw_artists: object) -> tuple[str, ...]:

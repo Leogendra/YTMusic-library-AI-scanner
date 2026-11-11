@@ -4,6 +4,10 @@ from src.domain.track_verdict import TrackVerdict
 from pathlib import Path
 import csv
 
+class CsvReportFormatError(ValueError):
+    """Raised when a CSV file does not have the columns of a report."""
+
+
 CSV_COLUMNS: tuple[str, ...] = ("status", "is_verified", "ai_vote", "human_vote", "flagged_artist", "title", "url")
 
 
@@ -12,6 +16,17 @@ CSV_COLUMNS: tuple[str, ...] = ("status", "is_verified", "ai_vote", "human_vote"
 def build_csv_rows(verdicts: list[TrackVerdict], include_outvoted_artists: bool) -> list[dict[str, str]]:
     """Turn every verdict into one CSV row."""
     return [_build_row(verdict, include_outvoted_artists) for verdict in verdicts]
+
+
+def read_csv_report(csv_file: Path) -> list[dict[str, str]]:
+    with csv_file.open(encoding="utf-8-sig", newline="") as input_stream:
+        reader = csv.DictReader(input_stream)
+        if reader.fieldnames is not None and set(CSV_COLUMNS) <= set(reader.fieldnames):
+            return list(reader)
+        else:
+            raise CsvReportFormatError(
+                f"{csv_file} is not a report of this tool (expected columns: {', '.join(CSV_COLUMNS)}). Delete it and run again to generate it."
+            )
 
 
 def write_csv_report(verdicts: list[TrackVerdict], output_file: Path, include_outvoted_artists: bool) -> None:
