@@ -14,6 +14,7 @@ import logging
 import sys
 
 DEFAULT_AUTH_FILE = Path("browser.json")
+DEFAULT_OUTPUT_FILE = Path("report.csv")
 DEFAULT_CACHE_DIRECTORY = "soundproof_cache"
 SOUNDPROOF_CACHE_FILE_NAME = "artists.json"
 
@@ -35,8 +36,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "-o",
         "--output",
         type=Path,
-        default=None,
-        help="Also export the tracks having at least one artist with an AI vote to this CSV file.",
+        default=DEFAULT_OUTPUT_FILE,
+        help=f"CSV file where the tracks having at least one artist with an AI vote are exported (default: {DEFAULT_OUTPUT_FILE}).",
     )
     parser.add_argument(
         "--cache-dir",
@@ -75,11 +76,10 @@ def run(options: argparse.Namespace) -> None:
     verdicts = analyze_library(library, database)
     print()
     print(render_console_report(verdicts))
-    if options.output is not None:
-        tracks_with_ai_votes = select_tracks_with_ai_votes(verdicts)
-        write_csv_report(tracks_with_ai_votes, options.output)
-        print()
-        print(f"CSV report written to {options.output} ({len(tracks_with_ai_votes)} tracks with at least one AI vote).")
+    tracks_with_ai_votes = select_tracks_with_ai_votes(verdicts)
+    write_csv_report(tracks_with_ai_votes, options.output)
+    print()
+    print(f"CSV report written to {options.output} ({len(tracks_with_ai_votes)} tracks with at least one AI vote).")
 
 
 def load_soundproof_database(cache_file: Path, force_refresh: bool) -> SoundProofDatabase:

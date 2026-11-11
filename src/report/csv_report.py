@@ -4,7 +4,7 @@ from src.domain.track_verdict import TrackVerdict
 from pathlib import Path
 import csv
 
-CSV_COLUMNS: tuple[str, ...] = ("is_verified", "status", "ai_vote", "human_vote", "title", "artists", "album", "url")
+CSV_COLUMNS: tuple[str, ...] = ("status", "is_verified", "ai_vote", "human_vote", "title", "artists", "album", "url")
 
 
 
@@ -28,8 +28,8 @@ def _build_row(verdict: TrackVerdict) -> dict[str, str]:
     human_votes = reference_artist.human_votes if reference_artist is not None else 0
     is_verified = reference_artist is not None and reference_artist.verified
     return {
-        "is_verified": "yes" if is_verified else "no",
         "status": verdict.status.value,
+        "is_verified": "yes" if is_verified else "no",
         "ai_vote": str(ai_votes),
         "human_vote": str(human_votes),
         "title": verdict.track.title,
