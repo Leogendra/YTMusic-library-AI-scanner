@@ -1,8 +1,8 @@
 __pycache__/
+soundproof_cache/
 .venv/
+venv/
 
-# YouTube Music session headers: full access to your account
+# sensitive data
 browser.json
-
-# Generated reports
 *.csv

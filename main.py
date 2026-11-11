@@ -14,7 +14,7 @@ import logging
 import sys
 
 DEFAULT_AUTH_FILE = Path("browser.json")
-DEFAULT_CACHE_DIRECTORY = Path.home() / ".cache" / "soundproof_cache"
+DEFAULT_CACHE_DIRECTORY = "soundproof_cache"
 SOUNDPROOF_CACHE_FILE_NAME = "artists.json"
 
 
