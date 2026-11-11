@@ -1,0 +1,8 @@
+__pycache__/
+.venv/
+
+# YouTube Music session headers: full access to your account
+browser.json
+
+# Generated reports
+*.csv
