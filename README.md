@@ -6,7 +6,7 @@ Lists the songs of your YouTube Music library whose artist is reported as publis
 
 Python 3.10 or newer, then:
 
-```sh
+```bash
 pip install ytmusicapi
 ```
 
@@ -22,8 +22,11 @@ This creates `browser.json`, which grants access to your account: do not share i
 
 ## Usage
 
-```sh
+```bash
 python main.py
+python main.py --force # list artists with at least one AI vote
 ```
 
-The CSV report (`report.csv`) lists the tracks having an artist with at least one AI vote and AI votes >= human votes. With `--force`, artists with at least one AI vote are listed even when human votes outnumber them.
+The CSV report (`report.csv`) lists the tracks having an artist with `AI votes >= human votes`.  
+
+You can use the `--delete` flag (/!\ **destructive**) to remove the tracks listed in `report.csv` from your YouTube Music library. It's recommended to review (and edit) the report before deleting any tracks.
