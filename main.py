@@ -1,7 +1,7 @@
 from src.infrastructure.soundproof_parser import SoundProofFormatError, parse_soundproof_artists
 from src.infrastructure.soundproof_dump_cache import SoundProofDumpCache
 from src.infrastructure.soundproof_database import SoundProofDatabase
-from src.domain.classification import select_tracks_with_ai_votes
+from src.domain.classification import select_flagged_tracks
 from src.infrastructure.ytmusic_library import YTMusicLibrary
 from src.application.library_analyzer import analyze_library
 from src.report.console_report import render_console_report
@@ -37,7 +37,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT_FILE,
-        help=f"CSV file where the tracks having at least one artist with an AI vote are exported (default: {DEFAULT_OUTPUT_FILE}).",
+        help=f"CSV file where the flagged tracks are exported (default: {DEFAULT_OUTPUT_FILE}).",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Also export the tracks whose artist has at least one AI vote but more human votes (default: only artists with AI votes >= human votes).",
     )
     parser.add_argument(
         "--cache-dir",
@@ -76,10 +81,10 @@ def run(options: argparse.Namespace) -> None:
     verdicts = analyze_library(library, database)
     print()
     print(render_console_report(verdicts))
-    tracks_with_ai_votes = select_tracks_with_ai_votes(verdicts)
-    write_csv_report(tracks_with_ai_votes, options.output)
+    flagged_tracks = select_flagged_tracks(verdicts, options.force)
+    write_csv_report(flagged_tracks, options.output, options.force)
     print()
-    print(f"CSV report written to {options.output} ({len(tracks_with_ai_votes)} tracks with at least one AI vote).")
+    print(f"CSV report written to {options.output} ({len(flagged_tracks)} flagged tracks).")
 
 
 def load_soundproof_database(cache_file: Path, force_refresh: bool) -> SoundProofDatabase:

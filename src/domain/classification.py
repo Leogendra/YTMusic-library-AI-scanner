@@ -40,26 +40,36 @@ def classify_track(artist_statuses: Iterable[ArtistStatus]) -> ArtistStatus:
     return ArtistStatus.UNKNOWN
 
 
-def has_ai_votes(entry: SoundProofArtist | None) -> bool:
-    """Tell whether the community reported the artist as AI at least once, even if human votes outnumber them."""
-    return entry is not None and entry.ai_votes >= MINIMUM_AI_VOTES
+def is_flagged_artist(entry: SoundProofArtist | None, include_outvoted_artists: bool) -> bool:
+    """Tell whether the artist must be reported.
+
+    An artist needs at least one AI vote. Unless outvoted artists are included, the AI votes must also be at least as many as the human votes.
+    """
+    if entry is None or entry.ai_votes < MINIMUM_AI_VOTES:
+        return False
+    elif include_outvoted_artists:
+        return True
+    else:
+        return entry.ai_votes >= entry.human_votes
 
 
-def select_tracks_with_ai_votes(verdicts: Iterable[TrackVerdict]) -> list[TrackVerdict]:
-    """Keep the tracks having at least one artist with an AI vote, whatever the overall verdict."""
+def select_flagged_tracks(verdicts: Iterable[TrackVerdict], include_outvoted_artists: bool) -> list[TrackVerdict]:
+    """Keep the tracks having at least one flagged artist, whatever the overall verdict."""
     return [
         verdict
         for verdict in verdicts
-        if any(has_ai_votes(match.entry) for match in verdict.artist_matches)
+        if any(is_flagged_artist(match.entry, include_outvoted_artists) for match in verdict.artist_matches)
     ]
 
 
-def most_ai_voted_artist(verdict: TrackVerdict) -> SoundProofArtist | None:
-    """Return the artist of the track with the most AI votes, or None when no artist has any.
+def most_ai_voted_flagged_artist(verdict: TrackVerdict, include_outvoted_artists: bool) -> SoundProofArtist | None:
+    """Return the flagged artist of the track with the most AI votes, or None when no artist is flagged.
 
     It is the single reference for the AI votes and the verification flag shown for a track, so both always describe the same artist.
     """
-    ai_voted_entries = [
-        match.entry for match in verdict.artist_matches if match.entry is not None and has_ai_votes(match.entry)
+    flagged_entries = [
+        match.entry
+        for match in verdict.artist_matches
+        if is_flagged_artist(match.entry, include_outvoted_artists)
     ]
-    return max(ai_voted_entries, key=lambda entry: entry.ai_votes, default=None)
+    return max(flagged_entries, key=lambda entry: entry.ai_votes, default=None)
