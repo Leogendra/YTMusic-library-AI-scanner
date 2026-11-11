@@ -1,4 +1,4 @@
-# YTMusic AI Filter
+# YTMusic library AI scanner
 
 Lists the songs of your YouTube Music library whose artist is reported as publishing AI-generated music in the [SoundProof](https://github.com/NuclearBlox/SoundProof-Dumps) community database.
 
@@ -24,5 +24,6 @@ This creates `browser.json`, which grants access to your account: do not share i
 
 ```sh
 python main.py
-python main.py --output report.csv
 ```
+
+The CSV report (`report.csv`) lists the tracks having an artist with at least one AI vote and AI votes >= human votes. With `--force`, artists with at least one AI vote are listed even when human votes outnumber them.
