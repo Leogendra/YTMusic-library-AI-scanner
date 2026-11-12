@@ -1,6 +1,8 @@
 from src.domain.soundproof_artist import SoundProofArtist
+from src.domain.artist_name import normalize_artist_name
 from src.domain.artist_status import ArtistStatus
 from src.domain.track_verdict import TrackVerdict
+from src.domain.track_artist import TrackArtist
 from collections.abc import Iterable
 
 MINIMUM_AI_VOTES = 1
@@ -60,6 +62,26 @@ def select_flagged_tracks(verdicts: Iterable[TrackVerdict], include_outvoted_art
         for verdict in verdicts
         if any(is_flagged_artist(match.entry, include_outvoted_artists) for match in verdict.artist_matches)
     ]
+
+
+def select_unknown_artists(verdicts: Iterable[TrackVerdict]) -> list[TrackArtist]:
+    """List once each artist missing from the database, on every track, even when a co-artist is known.
+
+    Artists are deduplicated by channel id, or by normalized name when they have no artist page.
+    """
+    unknown_artists: dict[str, TrackArtist] = {}
+    for verdict in verdicts:
+        for match in verdict.artist_matches:
+            if match.status is ArtistStatus.UNKNOWN:
+                unknown_artists.setdefault(_artist_key(match.artist), match.artist)
+    return list(unknown_artists.values())
+
+
+def _artist_key(artist: TrackArtist) -> str:
+    if artist.channel_id is not None:
+        return artist.channel_id
+    else:
+        return normalize_artist_name(artist.name)
 
 
 def most_ai_voted_flagged_artist(verdict: TrackVerdict, include_outvoted_artists: bool) -> SoundProofArtist | None:
