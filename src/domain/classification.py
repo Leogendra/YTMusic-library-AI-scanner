@@ -65,14 +65,14 @@ def select_flagged_tracks(verdicts: Iterable[TrackVerdict], include_outvoted_art
 
 
 def select_unknown_artists(verdicts: Iterable[TrackVerdict]) -> list[TrackArtist]:
-    """List once each artist missing from the database, on every track, even when a co-artist is known.
+    """List once each artist of the tracks missing from the database, ignoring the artists featured on a known track.
 
     Artists are deduplicated by channel id, or by normalized name when they have no artist page.
     """
     unknown_artists: dict[str, TrackArtist] = {}
     for verdict in verdicts:
-        for match in verdict.artist_matches:
-            if match.status is ArtistStatus.UNKNOWN:
+        if verdict.status is ArtistStatus.UNKNOWN:
+            for match in verdict.artist_matches:
                 unknown_artists.setdefault(_artist_key(match.artist), match.artist)
     return list(unknown_artists.values())
 
