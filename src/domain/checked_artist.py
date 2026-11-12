@@ -15,17 +15,12 @@ class CheckedArtist:
 
 
 def rank_checked_artists(checked_artists: Iterable[CheckedArtist]) -> list[CheckedArtist]:
-    """Put first the artists whose releases are mostly recent, which is typical of AI profiles publishing in bulk.
+    """Put first the artists who started publishing the most recently, which is typical of AI profiles publishing in bulk.
 
-    Artists sharing the same share of recent releases are ranked by their number of recent releases, then by the year of
-    their first release, the latest first.
+    Artists sharing the same year of first release are ranked by their number of releases over the last two years.
     """
     return sorted(
         checked_artists,
-        key=lambda checked_artist: (
-            checked_artist.statistics.recent_release_ratio,
-            checked_artist.statistics.releases_last_2_years,
-            checked_artist.statistics.first_year,
-        ),
+        key=lambda checked_artist: (checked_artist.statistics.first_year, checked_artist.statistics.releases_last_2_years),
         reverse=True,
     )

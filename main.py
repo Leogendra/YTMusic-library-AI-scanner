@@ -65,7 +65,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     mode_group.add_argument(
         "--check",
         action="store_true",
-        help="Rank the library artists missing from SoundProof by the share of their releases published over the last two years, so that the artists publishing mostly recent releases come first.",
+        help="Rank the library artists missing from SoundProof by the year of their first release, then by their number of releases over the last two years, so that the newest artists publishing the most come first.",
     )
     parser.add_argument(
         "--cache-dir",
