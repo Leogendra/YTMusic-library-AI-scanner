@@ -1,5 +1,6 @@
 from src.domain.removal_report import RemovalReport
 from src.domain.library_track import LibraryTrack
+from src.domain.track_artist import TrackArtist
 from ytmusicapi.exceptions import YTMusicError
 from typing import Any, Protocol
 from ytmusicapi import YTMusic
@@ -117,7 +118,7 @@ def _parse_song(raw_song: dict[str, Any]) -> LibraryTrack | None:
         return LibraryTrack(
             video_id=_optional_string(raw_song.get("videoId")),
             title=title,
-            artist_names=_parse_artist_names(raw_song.get("artists")),
+            artists=_parse_artists(raw_song.get("artists")),
             album_name=_parse_album_name(raw_song.get("album")),
         )
 
@@ -130,12 +131,12 @@ def _parse_removal_token(raw_song: dict[str, Any]) -> str | None:
         return None
 
 
-def _parse_artist_names(raw_artists: object) -> tuple[str, ...]:
+def _parse_artists(raw_artists: object) -> tuple[TrackArtist, ...]:
     if not isinstance(raw_artists, list):
         return ()
     else:
         return tuple(
-            artist["name"]
+            TrackArtist(name=artist["name"], channel_id=_optional_string(artist.get("id")))
             for artist in raw_artists
             if isinstance(artist, dict) and isinstance(artist.get("name"), str)
         )

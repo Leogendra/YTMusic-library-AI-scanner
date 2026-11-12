@@ -1,3 +1,4 @@
+from src.domain.track_artist import TrackArtist
 from dataclasses import dataclass
 
 
@@ -9,5 +10,5 @@ class LibraryTrack:
 
     video_id: str | None
     title: str
-    artist_names: tuple[str, ...]
+    artists: tuple[TrackArtist, ...]
     album_name: str | None
