@@ -17,8 +17,9 @@ import sys
 
 DEFAULT_AUTH_FILE = Path("browser.json")
 DEFAULT_OUTPUT_FILE = Path("report.csv")
-DEFAULT_CACHE_DIRECTORY = "soundproof_cache"
-SOUNDPROOF_CACHE_FILE_NAME = "artists.json"
+DEFAULT_CACHE_DIRECTORY = Path(".cache")
+# Each data source gets its own subdirectory so that their caches can be inspected or cleared separately.
+SOUNDPROOF_CACHE_FILE = Path("soundproof") / "artists.json"
 
 
 
@@ -55,7 +56,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "--cache-dir",
         type=Path,
         default=DEFAULT_CACHE_DIRECTORY,
-        help=f"Directory where the SoundProof dump is cached (default: {DEFAULT_CACHE_DIRECTORY}).",
+        help=f"Directory where the downloaded data is cached (default: {DEFAULT_CACHE_DIRECTORY}).",
     )
     parser.add_argument(
         "-r",
@@ -91,7 +92,7 @@ def run(options: argparse.Namespace) -> None:
 
 
 def generate_report(options: argparse.Namespace) -> None:
-    database = load_soundproof_database(options.cache_dir / SOUNDPROOF_CACHE_FILE_NAME, options.refresh)
+    database = load_soundproof_database(options.cache_dir / SOUNDPROOF_CACHE_FILE, options.refresh)
     print(f"Loaded {len(database)} SoundProof artists.")
     library = YTMusicLibrary.from_browser_headers(options.auth_file)
     print("Fetching your YouTube Music library...")

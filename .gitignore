@@ -1,5 +1,5 @@
 __pycache__/
-soundproof_cache/
+.cache/
 .venv/
 venv/
 
