@@ -1,16 +1,24 @@
 from src.infrastructure.soundproof_parser import SoundProofFormatError, parse_soundproof_artists
+from src.domain.classification import select_flagged_tracks, select_unknown_artists
+from src.infrastructure.ytmusic_artist_releases import YTMusicArtistReleases
+from src.infrastructure.artist_release_cache import ArtistReleaseCache
 from src.infrastructure.soundproof_dump_cache import SoundProofDumpCache
 from src.infrastructure.soundproof_database import SoundProofDatabase
-from src.domain.classification import select_flagged_tracks
+from src.domain.artist_check_report import ArtistCheckReport
 from src.domain.removal_report import RemovalReport
+from src.domain.track_verdict import TrackVerdict
 from src.infrastructure.ytmusic_client import create_ytmusic_client
 from src.infrastructure.ytmusic_library import YTMusicLibrary
 from src.application.library_analyzer import analyze_library
+from src.application.artist_checker import check_artists
 from src.report.console_report import render_console_report
+from src.report.check_report import write_check_report
 from src.report.csv_report import CsvReportFormatError, read_csv_report, write_csv_report
 from src.report.verdict_formatting import YOUTUBE_MUSIC_WATCH_URL, video_id_from_url
 from ytmusicapi.exceptions import YTMusicError
+from ytmusicapi import YTMusic
 from pathlib import Path
+from datetime import date
 import urllib.error
 import argparse
 import logging
@@ -18,8 +26,10 @@ import sys
 
 DEFAULT_AUTH_FILE = Path("browser.json")
 DEFAULT_OUTPUT_FILE = Path("report.csv")
+DEFAULT_CHECK_OUTPUT_FILE = Path("check.csv")
 DEFAULT_CACHE_DIRECTORY = Path(".cache")
 SOUNDPROOF_CACHE_FILE = Path("soundproof") / "artists.json"
+RELEASE_CACHE_FILE = Path("ytmusicapi") / "artist_releases.json"
 
 
 
@@ -39,18 +49,23 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "-o",
         "--output",
         type=Path,
-        default=DEFAULT_OUTPUT_FILE,
-        help=f"CSV file where the flagged tracks are exported (default: {DEFAULT_OUTPUT_FILE}).",
+        help=f"CSV file where the flagged tracks are exported (default: {DEFAULT_OUTPUT_FILE}, or {DEFAULT_CHECK_OUTPUT_FILE} with --check).",
     )
     parser.add_argument(
         "--force",
         action="store_true",
         help="Also export the tracks whose artist has at least one AI vote but more human votes (default: only artists with AI votes >= human votes).",
     )
-    parser.add_argument(
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
         "--delete",
         action="store_true",
         help="DESTRUCTIVE: remove from your library the tracks listed in the CSV report, after a confirmation. If the report does not exist yet, it is only generated so that you can review it first.",
+    )
+    mode_group.add_argument(
+        "--check",
+        action="store_true",
+        help="Rank the library artists missing from SoundProof by the mean year of their releases, so that the artists publishing many recent releases come first.",
     )
     parser.add_argument(
         "--cache-dir",
@@ -62,13 +77,20 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "-r",
         "--refresh",
         action="store_true",
-        help="Download the SoundProof dump even if the cached copy is less than a day old.",
+        help="Download the SoundProof dump even if the cached copy is less than a day old, and with --check the releases of every artist even if they are less than a week old.",
     )
     return parser
 
 
-def main() -> int:
+def parse_options() -> argparse.Namespace:
     options = build_argument_parser().parse_args()
+    if options.output is None:
+        options.output = DEFAULT_CHECK_OUTPUT_FILE if options.check else DEFAULT_OUTPUT_FILE
+    return options
+
+
+def main() -> int:
+    options = parse_options()
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
     # Song titles may contain characters the Windows console code page cannot encode.
     sys.stdout.reconfigure(errors="replace")
@@ -82,7 +104,9 @@ def main() -> int:
 
 
 def run(options: argparse.Namespace) -> None:
-    if not options.delete:
+    if options.check:
+        check_unknown_artists(options)
+    elif not options.delete:
         generate_report(options)
     elif not options.output.is_file():
         generate_report(options)
@@ -92,17 +116,44 @@ def run(options: argparse.Namespace) -> None:
 
 
 def generate_report(options: argparse.Namespace) -> None:
-    database = load_soundproof_database(options.cache_dir / SOUNDPROOF_CACHE_FILE, options.refresh)
-    print(f"Loaded {len(database)} SoundProof artists.")
-    library = YTMusicLibrary(create_ytmusic_client(options.auth_file))
-    print("Fetching your YouTube Music library...")
-    verdicts = analyze_library(library, database)
-    print()
-    print(render_console_report(verdicts))
+    verdicts = analyze_user_library(options, create_ytmusic_client(options.auth_file))
     flagged_tracks = select_flagged_tracks(verdicts, options.force)
     write_csv_report(flagged_tracks, options.output, options.force)
     print()
     print(f"CSV report written to {options.output} ({len(flagged_tracks)} flagged tracks).")
+
+
+def check_unknown_artists(options: argparse.Namespace) -> None:
+    client = create_ytmusic_client(options.auth_file)
+    unknown_artists = select_unknown_artists(analyze_user_library(options, client))
+    release_source = ArtistReleaseCache(YTMusicArtistReleases(client), options.cache_dir / RELEASE_CACHE_FILE, options.refresh)
+    print()
+    print(f"Fetching the releases of {len(unknown_artists)} artists missing from SoundProof...")
+    check_report = check_artists(unknown_artists, release_source, date.today().year, print_progress)
+    write_check_report(check_report.checked_artists, options.output)
+    print_check_summary(check_report, options.output)
+
+
+def analyze_user_library(options: argparse.Namespace, client: YTMusic) -> list[TrackVerdict]:
+    database = load_soundproof_database(options.cache_dir / SOUNDPROOF_CACHE_FILE, options.refresh)
+    print(f"Loaded {len(database)} SoundProof artists.")
+    print("Fetching your YouTube Music library...")
+    verdicts = analyze_library(YTMusicLibrary(client), database)
+    print()
+    print(render_console_report(verdicts))
+    return verdicts
+
+
+def print_progress(checked_count: int, total_count: int) -> None:
+    # The carriage return rewrites the same line, and the last update ends it.
+    print(f"\r  {checked_count}/{total_count} artists", end="\n" if checked_count == total_count else "", flush=True)
+
+
+def print_check_summary(check_report: ArtistCheckReport, output_file: Path) -> None:
+    print()
+    print(f"CSV check written to {output_file} ({len(check_report.checked_artists)} artists).")
+    if check_report.unverifiable_artist_count:
+        print(f"{check_report.unverifiable_artist_count} artists could not be verified (no artist page or no dated release).")
 
 
 def delete_reported_tracks(options: argparse.Namespace) -> None:
