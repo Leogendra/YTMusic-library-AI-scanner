@@ -48,5 +48,5 @@ The artists marked as "Not in SoundProof" in the console report are not in the c
 python main.py --check
 ```
 
-It writes `check.csv` where these artists are ranked by a naive heuristic: AI profiles publish many releases in a short time, so the artists with the highest number of releases over the last two years come first.  
+It writes `check.csv` where these artists are ranked by a naive heuristic: AI profiles are recent and publish many releases in a short time, so the artists whose first release is the most recent come first, then those with the highest number of releases over the last two years.  
 Disclaimer: this is only a greedy heuristic: a new human artist also has recent releases only, so review the top of the list by hand before voting.
