@@ -17,6 +17,11 @@ class ReleaseStatistics:
     releases_last_2_years: int
     first_year: int
 
+    @property
+    def recent_release_ratio(self) -> float:
+        """Share of the releases published over the last two years, between 0 and 1."""
+        return self.releases_last_2_years / self.release_count
+
 
 def compute_release_statistics(release_years: Sequence[int], current_year: int) -> ReleaseStatistics | None:
     """Summarize the release years of an artist, or return None when the artist has no dated release."""
