@@ -3,6 +3,7 @@ from src.infrastructure.soundproof_dump_cache import SoundProofDumpCache
 from src.infrastructure.soundproof_database import SoundProofDatabase
 from src.domain.classification import select_flagged_tracks
 from src.domain.removal_report import RemovalReport
+from src.infrastructure.ytmusic_client import create_ytmusic_client
 from src.infrastructure.ytmusic_library import YTMusicLibrary
 from src.application.library_analyzer import analyze_library
 from src.report.console_report import render_console_report
@@ -18,7 +19,6 @@ import sys
 DEFAULT_AUTH_FILE = Path("browser.json")
 DEFAULT_OUTPUT_FILE = Path("report.csv")
 DEFAULT_CACHE_DIRECTORY = Path(".cache")
-# Each data source gets its own subdirectory so that their caches can be inspected or cleared separately.
 SOUNDPROOF_CACHE_FILE = Path("soundproof") / "artists.json"
 
 
@@ -94,7 +94,7 @@ def run(options: argparse.Namespace) -> None:
 def generate_report(options: argparse.Namespace) -> None:
     database = load_soundproof_database(options.cache_dir / SOUNDPROOF_CACHE_FILE, options.refresh)
     print(f"Loaded {len(database)} SoundProof artists.")
-    library = YTMusicLibrary.from_browser_headers(options.auth_file)
+    library = YTMusicLibrary(create_ytmusic_client(options.auth_file))
     print("Fetching your YouTube Music library...")
     verdicts = analyze_library(library, database)
     print()
@@ -111,7 +111,7 @@ def delete_reported_tracks(options: argparse.Namespace) -> None:
     if not video_ids:
         print(f"No track to delete in {options.output}.")
     else:
-        library = YTMusicLibrary.from_browser_headers(options.auth_file)
+        library = YTMusicLibrary(create_ytmusic_client(options.auth_file))
         print_tracks_to_delete(report_rows, options.output)
         if ask_deletion_confirmation(len(video_ids)):
             print_removal_report(library.remove_tracks(video_ids))
